@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -27,10 +27,11 @@ const httpStatuses: HttpStatus[] = [
   { code: 404, description: "Not Found", geekDescription: "未找到，就像你在代码里搜索 bug，结果发现 bug 在你的逻辑里。" },
   { code: 500, description: "Internal Server Error", geekDescription: "服务器内部错误，就像你的大脑在被问及'你到底喜欢谁'时突然宕机。" },
   { code: 502, description: "Bad Gateway", geekDescription: "错误网关，就像你试图用 Excel 处理 Big Data，结果电脑直接罢工。" },
-  { code: 503, description: "Service Unavailable", geekDescription: "服务不可用，就像你准备通宵写代码，结果发现咖啡机坏了。" },
+  { code: 503, description: "Service Unavailable", geekDescription: "服务不可用，就像你准备通宵写代��，结果发现咖啡机坏了。" },
 ]
 
 const categories = [
+  { value: "all", label: "全部" },
   { value: "1xx", label: "1xx - 信息响应" },
   { value: "2xx", label: "2xx - 成功响应" },
   { value: "3xx", label: "3xx - 重定向" },
@@ -41,7 +42,7 @@ const categories = [
 export default function Home() {
   const [isClient, setIsClient] = useState(false)
   const [filter, setFilter] = useState('')
-  const [activeTab, setActiveTab] = useState('1xx')
+  const [activeTab, setActiveTab] = useState('all')
   const [layout, setLayout] = useState<'grid' | 'large'>('grid')
   const [currentIndex, setCurrentIndex] = useState(0)
 
@@ -50,47 +51,67 @@ export default function Home() {
   }, [])
 
   const filteredStatuses = httpStatuses.filter(status => 
-    status.code.toString().includes(filter)
+    (activeTab === 'all' || status.code.toString().startsWith(activeTab[0])) &&
+    (filter === '' || 
+     status.code.toString().includes(filter) ||
+     status.description.toLowerCase().includes(filter.toLowerCase()) ||
+     status.geekDescription.toLowerCase().includes(filter.toLowerCase()))
   )
 
-  useEffect(() => {
-    const newIndex = filteredStatuses.findIndex(status => status.code.toString().startsWith(activeTab[0]))
-    setCurrentIndex(newIndex >= 0 ? newIndex : 0)
-  }, [activeTab, filter, filteredStatuses]) // 添加 filteredStatuses 到依赖数组
+  const handleTabChange = (value: string) => {
+    setActiveTab(prevTab => prevTab === value ? 'all' : value)
+  }
 
-  const handlePrevious = () => {
+  const handlePrevious = useCallback(() => {
     setCurrentIndex((prevIndex) => {
       const newIndex = prevIndex > 0 ? prevIndex - 1 : filteredStatuses.length - 1
-      const newActiveTab = `${Math.floor(filteredStatuses[newIndex].code / 100)}xx`
-      setActiveTab(newActiveTab)
       return newIndex
     })
-  }
+  }, [filteredStatuses.length])
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     setCurrentIndex((prevIndex) => {
       const newIndex = prevIndex < filteredStatuses.length - 1 ? prevIndex + 1 : 0
-      const newActiveTab = `${Math.floor(filteredStatuses[newIndex].code / 100)}xx`
-      setActiveTab(newActiveTab)
       return newIndex
     })
-  }
+  }, [filteredStatuses.length])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (layout === 'large') {
+        if (event.key === 'ArrowLeft') {
+          handlePrevious()
+        } else if (event.key === 'ArrowRight') {
+          handleNext()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [layout, handlePrevious, handleNext])
+
+  useEffect(() => {
+    setCurrentIndex(0)
+  }, [activeTab, filter])
 
   if (!isClient) {
-    return null // 或者返回一个加载指示器
+    return null
   }
 
   return (
     <div className="container mx-auto px-4 py-8 bg-gray-50 min-h-screen">
       <h1 className="text-5xl font-bold mb-8 text-center text-gray-900">HTTP 状态猫咪秀</h1>
       <div className="flex justify-between items-center mb-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-grow">
-          <TabsList className="grid w-full grid-cols-5 bg-white rounded-full shadow-md p-1">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-grow">
+          <TabsList className="grid w-full grid-cols-6 bg-gray-100 rounded-full shadow-sm p-1">
             {categories.map((category) => (
               <TabsTrigger 
                 key={category.value} 
                 value={category.value}
-                className="rounded-full text-sm font-medium transition-colors"
+                className="rounded-full text-sm font-medium transition-colors data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm"
               >
                 {category.label}
               </TabsTrigger>
@@ -108,7 +129,7 @@ export default function Home() {
       </div>
       <Input
         type="text"
-        placeholder="搜索状态码..."
+        placeholder="搜索状态码、描述或极客描述..."
         value={filter}
         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilter(e.target.value)}
         className="mb-6 rounded-full bg-white shadow-md"
@@ -122,7 +143,6 @@ export default function Home() {
               onClick={() => {
                 setLayout('large')
                 setCurrentIndex(filteredStatuses.findIndex(s => s.code === status.code))
-                setActiveTab(`${Math.floor(status.code / 100)}xx`)
               }}
             >
               <Image
@@ -147,13 +167,15 @@ export default function Home() {
             >
               <ChevronLeftIcon />
             </Button>
-            <Image
-              src={`https://http.cat/${filteredStatuses[currentIndex].code}`}
-              alt={`HTTP 状态 ${filteredStatuses[currentIndex].code}`}
-              width={600}
-              height={600}
-              className="rounded-2xl mb-6"
-            />
+            <div className="flex justify-center items-center h-[600px]">
+              <Image
+                src={`https://http.cat/${filteredStatuses[currentIndex].code}`}
+                alt={`HTTP 状态 ${filteredStatuses[currentIndex].code}`}
+                width={600}
+                height={600}
+                className="rounded-2xl mb-6 object-contain"
+              />
+            </div>
             <Button
               onClick={handleNext}
               className="absolute right-4 top-1/2 transform -translate-y-1/2 z-10 rounded-full"
@@ -168,7 +190,7 @@ export default function Home() {
       )}
       <div className="mt-10 overflow-x-auto">
         <div className="flex space-x-4 pb-4">
-          {httpStatuses.map((status, _index) => (
+          {httpStatuses.map((status) => (
             <div
               key={status.code}
               className={`relative ${
