@@ -168,7 +168,7 @@ export default function Home() {
       )}
       <div className="mt-10 overflow-x-auto">
         <div className="flex space-x-4 pb-4">
-          {httpStatuses.map((status, index) => (
+          {httpStatuses.map((status, _index) => (
             <div
               key={status.code}
               className={`relative ${
