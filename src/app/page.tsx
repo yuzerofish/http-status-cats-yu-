@@ -39,10 +39,15 @@ const categories = [
 ]
 
 export default function Home() {
+  const [isClient, setIsClient] = useState(false)
   const [filter, setFilter] = useState('')
   const [activeTab, setActiveTab] = useState('1xx')
   const [layout, setLayout] = useState<'grid' | 'large'>('grid')
   const [currentIndex, setCurrentIndex] = useState(0)
+
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
 
   const filteredStatuses = httpStatuses.filter(status => 
     status.code.toString().includes(filter)
@@ -51,7 +56,7 @@ export default function Home() {
   useEffect(() => {
     const newIndex = filteredStatuses.findIndex(status => status.code.toString().startsWith(activeTab[0]))
     setCurrentIndex(newIndex >= 0 ? newIndex : 0)
-  }, [activeTab, filter])
+  }, [activeTab, filter, filteredStatuses]) // 添加 filteredStatuses 到依赖数组
 
   const handlePrevious = () => {
     setCurrentIndex((prevIndex) => {
@@ -69,6 +74,10 @@ export default function Home() {
       setActiveTab(newActiveTab)
       return newIndex
     })
+  }
+
+  if (!isClient) {
+    return null // 或者返回一个加载指示器
   }
 
   return (
@@ -106,13 +115,13 @@ export default function Home() {
       />
       {layout === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredStatuses.map((status, index) => (
+          {filteredStatuses.map((status) => (
             <div
               key={status.code}
               className="bg-white p-6 rounded-2xl shadow-lg hover:shadow-xl transition-shadow cursor-pointer"
               onClick={() => {
                 setLayout('large')
-                setCurrentIndex(index)
+                setCurrentIndex(filteredStatuses.findIndex(s => s.code === status.code))
                 setActiveTab(`${Math.floor(status.code / 100)}xx`)
               }}
             >
